@@ -85,8 +85,7 @@ class SamParser(object):
 
 
 parser = argparse.ArgumentParser('deplete_host_from_sam.py')
-parser.add_argument('sam_file', type=str, default=None, required=True,
-                    help='Input SAM filepath')
+parser.add_argument('sam_file', type=str, help='Input SAM filepath')
 parser.add_argument('-r1', '--forward', type=str, default=None, required=True,
                     help='Output forward single- or paired-end read FASTQ file or Nanopore long read FASTQ file')
 parser.add_argument('-r2', '--reverse', type=str, default=None, required=False,
