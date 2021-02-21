@@ -1,0 +1,38 @@
+Bootstrap: docker
+From: ubuntu:bionic
+
+
+%environment
+    CONDA_INSTALL_PATH="/usr/local/miniconda3"
+    CONDA_BIN_PATH="/usr/local/miniconda3/bin"
+    export PATH="$CONDA_BIN_PATH:$PATH"
+    . /usr/local/miniconda3/etc/profile.d/conda.sh
+    conda activate DENOVO
+
+
+%files
+    scripts/1_tools_install.sh /opt
+    scripts/2_miniconda_install.sh /opt
+    scripts/3_conda_activate.sh /opt
+
+
+%post
+    cd $HOME
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    unzip \
+    gcc \
+    python-dev \
+    python-pip \
+    python3-dev \
+    python3-pip \
+    python-numpy \
+    python-setuptools \
+    pkg-config \
+    apt-transport-https \
+    && apt-get update
+    bash /opt/1_tools_install.sh
+    bash /opt/2_miniconda_install.sh
+    export PATH="/usr/local/miniconda3/bin:$PATH"
+    bash /opt/3_conda_activate.sh
