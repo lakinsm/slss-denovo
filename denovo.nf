@@ -6,16 +6,26 @@ if( params.help ) {
 
 reference_db = file(params.reference)
 threads = params.threads
-genome_size=params.genome_size
 hybrid = file(params.hybrid)
+reverse = file(params.reverse)
 meta_flag = params.metagenomic
 long_only_flag = params.nanopore
 
 
 Channel
-    .fromFilePairs( params.reads, size: long_only_flag ? 1 : 2 )
-    .ifEmpty { error "Cannot find any reads matching: ${params.reads}" }
-    .set { reads }
+    .fromPath( params.forward )
+    .map{ int -> tuple("$in", in.getSimpleName(), file(in)) }
+    .into{ forward_reads }
+
+
+Channel
+	.fromPath( params.reverse )
+	.into{ reverse_reads }
+
+
+Channel
+	.fromPath( params.hybrid )
+	.into{ hybrid_reads }
 
 
 process BwaIndexReference {
@@ -34,19 +44,27 @@ process BwaHostDepletionShort {
     tag {samplename}
 
     input:
-        set samplename, file(forward), file(reverse) from reads
+        set samplename, file(forward) from forward_reads
+        file(reverse)
         file(index) from host_reference_short
-		file(reference_db)
+		file opt_ref from reference_db
 	output:
 		set samplename, file("${samplename}_short_R1.fastq"), file("${samplename}_short_R2.fastq") into (short_depleted)
 
 	when:
 		!long_only_flag
 
-    """
-	bwa mem -t $threads $reference_db $forward $reverse > ${samplename}.sam
-	deplete_host_from_sam.py ${samplename}.sam -r1 ${samplename}_short_R1.fastq -r2 ${samplename}_short_R2.fastq
-    """
+	script:
+	if( opt_ref.name != 'NONE' )
+	    """
+		bwa mem -t $threads $opt_ref $forward $reverse > ${samplename}.sam
+		deplete_host_from_sam.py ${samplename}.sam -r1 ${samplename}_short_R1.fastq -r2 ${samplename}_short_R2.fastq
+	    """
+	else
+		"""
+		cp forward ${samplename}_short_R1.fastq
+		cp reverse ${samplename}_short_R2.fastq
+		"""
 }
 
 
@@ -54,19 +72,25 @@ process BwaHostDepletionLongExclusive {
     tag {samplename}
 
     input:
-        set samplename, file(long) from reads
+        set samplename, file(long) from forward_reads
         file(index) from host_reference_long
-		file(reference_db)
+		file opt_ref from reference_db
 	output:
 		set samplename, file("${samplename}_long.fastq") into (long_depleted)
 
 	when:
 		long_only_flag
 
-    """
-	bwa mem -t $threads $reference_db $long > ${samplename}.sam
-	deplete_host_from_sam.py ${samplename}.sam -r1 ${samplename}_long.fastq
-    """
+	script:
+	if( opt_ref.name != 'NONE' )
+	    """
+		bwa mem -t $threads $opt_ref $long > ${samplename}.sam
+		deplete_host_from_sam.py ${samplename}.sam -r1 ${samplename}_long.fastq
+	    """
+	else
+		"""
+		cp $long ${samplename}_long.fastq
+		"""
 }
 
 
@@ -75,17 +99,23 @@ process BwaHostDepletionLongHybrid {
     input:
         file(hybrid)
         file(index) from host_reference_hybrid
-		file(reference_db)
+		file opt_ref from reference_db
 	output:
 		file("long.fastq") into (long_hybrid_depleted)
 
 	when:
 		hybrid && !long_only_flag
 
-    """
-	bwa mem -t $threads $reference_db $hybrid > long.sam
-	deplete_host_from_sam.py long.sam -r1 long.fastq
-    """
+	script:
+	if( opt_ref.name != 'NONE' )
+	    """
+		bwa mem -t $threads $opt_ref $hybrid > long.sam
+		deplete_host_from_sam.py long.sam -r1 long.fastq
+	    """
+	else
+		"""
+		cp $hybrid long.fastq
+		"""
 }
 
 
@@ -158,7 +188,7 @@ process FlyeAssemblyLong {
 		"""
 	else
 		"""
-		flye --nano-raw $long -g ${genome_size} -t $threads -o flye_output --resume
+		flye --nano-raw $long -t $threads -o flye_output --resume
 		mv flye_output/assembly.fasta ${samplename}_flye_assembly.fasta
 		mv flye_output/assembly_info.txt ${samplename}_flye_assembly_info.txt
 		"""
@@ -216,7 +246,8 @@ def help() {
     println ""
     println "Input/output options:"
     println ""
-    println "    --reads         STR      path to paired-end FASTQ input or concatenated Nanopore FASTQ input for a single sample"
+    println "    --forward       STR      path to forward FASTQ input or concatenated Nanopore FASTQ input for a single sample"
+    println "    --reverse       STR      path to reverse FASTQ input for a single sample"
     println "    --hybrid        STR      optional path to concatenated Nanopore FASTQ input for hybrid assembly"
     println "    --output        STR      path to output directory"
     println "    --reference     STR      path to pre-made BLAST database to query against"
@@ -226,7 +257,6 @@ def help() {
     println "    --threads       INT      number of process threads, default 1 (max thread use = maxForks * threads)"
     println "    --metagenomic   FLAG     use metaSPAdes or Flye for metagenomic sample (cannot be used with hybrid assembly)"
     println "    --nanopore      FLAG     the input reads are concatenated Nanopore FASTQ data only (uses Flye assembler)"
-    println "    --genome_size   STR      reference genome size (format [float][m/g] for mega/giga basepairs"
     println ""
     println "Help options:"
     println ""
