@@ -190,7 +190,7 @@ process FlyeAssemblyLong {
 	script:
 	if( meta_flag )
 		"""
-		flye --nano-raw $reads -g ${genome_size} -t $threads -o flye_output --meta
+		flye --nano-raw $reads -t $threads -o flye_output --meta
 		mv flye_output/assembly.fasta ${samplename}_flye_assembly.fasta
 		mv flye_output/assembly_info.txt ${samplename}_flye_assembly_info.txt
 		"""
