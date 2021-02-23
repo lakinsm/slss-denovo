@@ -21,6 +21,8 @@ parser.add_argument('-r2', '--reverse', default=None, required=False, type=str,
                     help='Reverse paired-end Illumina FASTQ (optional)')
 parser.add_argument('-l', '--long_reads', default=None, required=False, type=str,
                     help='Nanopore fastq_pass directory if hybrid assembly (must have -r1, -r2, and -l specified, optional)')
+parser.add_argument('-o', '--output', default=None, required=True, type=str,
+                    help='Path to output directory')
 parser.add_argument('--host_reference', default=None, required=False, type=str,
                     help='Host reference sequence FASTA for host depletion (optional)')
 parser.add_argument('-w', '--work_dir', default='/tmp', type=str,
@@ -116,7 +118,9 @@ if __name__ == '__main__':
 		temp_dir,
 		'-resume',
 		'--threads',
-		args.threads
+		args.threads,
+		'--output',
+		args.output,
 	]
 
 	if args.host_reference:
