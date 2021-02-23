@@ -66,19 +66,16 @@ def validate_input_args(arg_obj):
 			raise ValueError
 
 	if arg_obj.metagenomic:
-		if arg_obj.forward and arg_obj.reverse and arg_obj.long_reads:
-			sys.stderr.write('\nError: metagenomic assembly cannot be used with hybrid assembly.  Please use paired-end '
-			                 'Illumina or exclusively long-read Nanopore assembly options instead.\n')
-			raise ValueError
+		if arg_obj.forward:
+			if arg_obj.reverse and arg_obj.long_reads:
+				sys.stderr.write('\nError: metagenomic assembly cannot be used with hybrid assembly.  Please use paired-end '
+				                 'Illumina or exclusively long-read Nanopore assembly options instead.\n')
+				raise ValueError
 
-		elif not arg_obj.reverse:
-			sys.stderr.write('\nError: metagenomic assembly with Illumina data requires -r1 and -r2 to be specified (paired-end)')
-			raise ValueError
-
-	if not arg_obj.reverse and not os.path.isdir(arg_obj.forward):
-		sys.stderr.write('\nError: Using only -r1 requires the -r1 path to be a Nanopore fastq_pass directory.  Single-end '
-		                 'assembly for Illumina reads is not supported.')
-		raise ValueError
+			if not arg_obj.reverse and not os.path.isdir(arg_obj.forward):
+				sys.stderr.write('\nError: Using only -r1 requires the -r1 path to be a Nanopore fastq_pass directory.  Single-end '
+				                 'assembly for Illumina reads is not supported.')
+				raise ValueError
 
 	if arg_obj.reverse and not arg_obj.long_reads:
 		if os.path.isdir(arg_obj.forward):
