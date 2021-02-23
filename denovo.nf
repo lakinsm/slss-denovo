@@ -14,18 +14,18 @@ long_only_flag = params.nanopore
 
 Channel
     .fromPath( params.forward )
-    .map{ int -> tuple("$in", in.getSimpleName(), file(in)) }
-    .into{ forward_reads }
+    .map{ in -> tuple( in.getName(), file(in)) }
+    .into{ forward_reads; nanopore_reads }
 
 
 Channel
 	.fromPath( params.reverse )
-	.into{ reverse_reads }
+	.set{ reverse_reads }
 
 
 Channel
 	.fromPath( params.hybrid )
-	.into{ hybrid_reads }
+	.set{ hybrid_reads }
 
 
 process BwaIndexReference {
@@ -34,9 +34,15 @@ process BwaIndexReference {
 	output:
 		file '*' into (host_reference_short, host_reference_long, host_reference_hybrid)
 
-	"""
-	bwa index $db_dir
-	"""
+	script:
+	if( db_dir.name != 'NONE_REF' )
+		"""
+		bwa index $db_dir
+		"""
+	else
+		"""
+		touch empty.fasta
+		"""
 }
 
 
@@ -44,18 +50,18 @@ process BwaHostDepletionShort {
     tag {samplename}
 
     input:
-        set samplename, file(forward) from forward_reads
+        set samplename, path(forward) from forward_reads
         file(reverse)
         file(index) from host_reference_short
 		file opt_ref from reference_db
 	output:
-		set samplename, file("${samplename}_short_R1.fastq"), file("${samplename}_short_R2.fastq") into (short_depleted)
+		set samplename, file("${samplename}_short_R1.fastq"), file("${samplename}_short_R2.fastq") into (short_depleted, short_hybrid_depleted)
 
 	when:
 		!long_only_flag
 
 	script:
-	if( opt_ref.name != 'NONE' )
+	if( opt_ref.name != 'NONE_REF' )
 	    """
 		bwa mem -t $threads $opt_ref $forward $reverse > ${samplename}.sam
 		deplete_host_from_sam.py ${samplename}.sam -r1 ${samplename}_short_R1.fastq -r2 ${samplename}_short_R2.fastq
@@ -72,7 +78,7 @@ process BwaHostDepletionLongExclusive {
     tag {samplename}
 
     input:
-        set samplename, file(long) from forward_reads
+        set samplename, path(reads) from nanopore_reads
         file(index) from host_reference_long
 		file opt_ref from reference_db
 	output:
@@ -82,14 +88,14 @@ process BwaHostDepletionLongExclusive {
 		long_only_flag
 
 	script:
-	if( opt_ref.name != 'NONE' )
+	if( opt_ref.name != 'NONE_REF' )
 	    """
-		bwa mem -t $threads $opt_ref $long > ${samplename}.sam
+		bwa mem -t $threads $opt_ref $reads > ${samplename}.sam
 		deplete_host_from_sam.py ${samplename}.sam -r1 ${samplename}_long.fastq
 	    """
 	else
 		"""
-		cp $long ${samplename}_long.fastq
+		cp $reads ${samplename}_long.fastq
 		"""
 }
 
@@ -97,17 +103,17 @@ process BwaHostDepletionLongExclusive {
 process BwaHostDepletionLongHybrid {
 
     input:
-        file(hybrid)
+        file hybrid_str from hybrid
         file(index) from host_reference_hybrid
 		file opt_ref from reference_db
 	output:
 		file("long.fastq") into (long_hybrid_depleted)
 
 	when:
-		hybrid && !long_only_flag
+		(hybrid_str.name != 'NONE_HYBRID') && !long_only_flag
 
 	script:
-	if( opt_ref.name != 'NONE' )
+	if( opt_ref.name != 'NONE_REF' )
 	    """
 		bwa mem -t $threads $opt_ref $hybrid > long.sam
 		deplete_host_from_sam.py long.sam -r1 long.fastq
@@ -152,7 +158,7 @@ process SpadesAssemblyHybrid {
 	publishDir "${params.output}/SpadesAssemblies", mode: "copy"
 
 	input:
-		set samplename, file(forward), file(reverse) from short_depleted
+		set samplename, file(forward), file(reverse) from short_hybrid_depleted
 		file(long) from long_hybrid_depleted
 	output:
 		file("${samplename}_spades_assembly.fasta") into spades_out_hybrid
@@ -173,7 +179,7 @@ process FlyeAssemblyLong {
 	publishDir "${params.output}/FlyeAssemblies", mode: "copy"
 
 	input:
-		set samplename, file(long) from long_depleted
+		set samplename, file(reads) from long_depleted
 	output:
 		file("${samplename}_flye_assembly.fasta") into flye_out
 		file("${samplename}_flye_assembly_info.txt")
@@ -184,11 +190,13 @@ process FlyeAssemblyLong {
 	script:
 	if( meta_flag )
 		"""
-		flye --nano-raw $long -g ${genome_size} -t $threads -o flye_output --meta --resume
+		flye --nano-raw $reads -g ${genome_size} -t $threads -o flye_output --meta
+		mv flye_output/assembly.fasta ${samplename}_flye_assembly.fasta
+		mv flye_output/assembly_info.txt ${samplename}_flye_assembly_info.txt
 		"""
 	else
 		"""
-		flye --nano-raw $long -t $threads -o flye_output --resume
+		flye --nano-raw $reads -t $threads -o flye_output
 		mv flye_output/assembly.fasta ${samplename}_flye_assembly.fasta
 		mv flye_output/assembly_info.txt ${samplename}_flye_assembly_info.txt
 		"""
@@ -221,7 +229,7 @@ process GenomeEvaluationFlye {
 	publishDir "${params.output}/AssemblyStatistics", mode: "copy"
 
 	input:
-		file(flye_fasta) from flye_output
+		file(flye_fasta) from flye_out
 		file(reference_db)
 	output:
 		file "quast_output"

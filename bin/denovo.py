@@ -25,7 +25,7 @@ parser.add_argument('--host_reference', default=None, required=False, type=str,
                     help='Host reference sequence FASTA for host depletion (optional)')
 parser.add_argument('-w', '--work_dir', default='/tmp', type=str,
                     help='Working directory for temporary files (must be shared if using SLURM/HPC)')
-parser.add_argument('-m', '--metagenomic', default=False, action='store_true', type=bool,
+parser.add_argument('-m', '--metagenomic', default=False, action='store_true',
                     help='Flag for metagenomic input file (cannot be used with hybrid assembly)')
 parser.add_argument('-s', '--singularity', type=str, default=None,
                     help='Path to Singularity container if other than default (pulls from cloud if this argument isn\'t used)')
@@ -92,15 +92,19 @@ def validate_input_args(arg_obj):
 			raise ValueError
 
 
-def get_real_dir(infile):
+def get_real_dir_from_file(infile):
 	return os.path.dirname(os.path.realpath(infile))
+
+
+def get_real_dir_from_dir(indir):
+	return os.path.realpath(indir)
 
 
 if __name__ == '__main__':
 	args = parser.parse_args()
 	validate_input_args(args)
-	temp_dir = get_real_dir(args.work_dir)
-	nextflow_path = '/'.join(get_real_dir(sys.argv[0]).split('/')[:-1]) + 'denovo.nf'
+	temp_dir = get_real_dir_from_dir(args.work_dir)
+	nextflow_path = '/'.join(get_real_dir_from_file(sys.argv[0]).split('/')[:-1]) + '/denovo.nf'
 
 	if args.slurm:
 		nextflow_config = nextflow_path.replace('denovo.nf', SLURM_CONFIG)
@@ -121,7 +125,7 @@ if __name__ == '__main__':
 	if args.host_reference:
 		nextflow_arglist += ['--reference', args.host_reference]
 	else:
-		nextflow_arglist += ['--reference', 'NONE']
+		nextflow_arglist += ['--reference', 'NONE_REF']
 
 	if args.singularity:
 		nextflow_arglist += ['-with-singularity', args.singularity]
