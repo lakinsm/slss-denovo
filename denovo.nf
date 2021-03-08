@@ -145,7 +145,7 @@ process SpadesAssemblyShort {
 		file("${samplename}_spades_assembly.fasta") into spades_out_short
 
 	when:
-		!long_only_flag
+		!hybrid && !long_only_flag
 
 	script:
 	if( meta_flag )
@@ -168,7 +168,7 @@ process SpadesAssemblyHybrid {
 
 	input:
 		set samplename, file(forward), file(reverse) from short_hybrid_depleted
-		file(long) from long_hybrid_depleted
+		file(long_reads) from long_hybrid_depleted
 	output:
 		file("${samplename}_spades_assembly.fasta") into spades_out_hybrid
 
@@ -178,7 +178,7 @@ process SpadesAssemblyHybrid {
 	script:
 	if( meta_flag )
 		"""
-		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse --nanopore $long -o spades_output --metaviral
+		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse --nanopore $long_reads -o spades_output --metaviral
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 	else
