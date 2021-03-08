@@ -5,6 +5,7 @@ if( params.help ) {
 }
 
 reference_db = file(params.reference)
+host_reference = file(params.host)
 threads = params.threads
 hybrid = file(params.hybrid)
 reverse = file(params.reverse)
@@ -28,22 +29,29 @@ Channel
 	.set{ hybrid_reads }
 
 
-process BwaIndexReference {
-	input:
-		path db_dir from reference_db
-	output:
-		file '*' into (host_reference_short, host_reference_long, host_reference_hybrid)
+if( params.use_index ) {
+	host_reference_short = Channel.fromPath("${params.host}.*")
+	host_reference_long = Channel.fromPath("${params.host}.*")
+	host_reference_hybrid = Channel.fromPath("${params.host}.*")
+} else {
+	process BwaIndexReference {
+		input:
+			path db_dir from host_reference
+		output:
+			file "${params.host}.*" into (host_reference_short, host_reference_long, host_reference_hybrid)
 
-	script:
-	if( db_dir.name != 'NONE_REF' )
-		"""
-		bwa index $db_dir
-		"""
-	else
-		"""
-		touch empty.fasta
-		"""
+		script:
+		if( db_dir.name != 'NONE_REF' )
+			"""
+			bwa index $db_dir
+			"""
+		else
+			"""
+			touch empty.fasta
+			"""
+	}
 }
+
 
 
 process BwaHostDepletionShort {
@@ -52,8 +60,8 @@ process BwaHostDepletionShort {
     input:
         set samplename, path(forward) from forward_reads
         file(reverse)
-        file(index) from host_reference_short
-		file opt_ref from reference_db
+        file index from host_reference_short.collect()
+		file opt_ref from host_reference
 	output:
 		set samplename, file("${samplename}_short_R1.fastq"), file("${samplename}_short_R2.fastq") into (short_depleted, short_hybrid_depleted)
 
@@ -79,8 +87,8 @@ process BwaHostDepletionLongExclusive {
 
     input:
         set samplename, path(reads) from nanopore_reads
-        file(index) from host_reference_long
-		file opt_ref from reference_db
+        file index from host_reference_long.collect()
+		file opt_ref from host_reference
 	output:
 		set samplename, file("${samplename}_long.fastq") into (long_depleted)
 
@@ -104,8 +112,8 @@ process BwaHostDepletionLongHybrid {
 
     input:
         file hybrid_str from hybrid
-        file(index) from host_reference_hybrid
-		file opt_ref from reference_db
+        file index from host_reference_hybrid.collect()
+		file opt_ref from host_reference
 	output:
 		file("long.fastq") into (long_hybrid_depleted)
 
@@ -141,7 +149,7 @@ process SpadesAssemblyShort {
 	script:
 	if( meta_flag )
 		"""
-		spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse -o spades_output --meta
+		spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse -o spades_output --metaviral
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 	else
@@ -166,10 +174,17 @@ process SpadesAssemblyHybrid {
 	when:
 		hybrid && !long_only_flag
 
-	"""
-	spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse --nanopore $long -o spades_output
-	mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
-	"""
+	script:
+	if( meta_flag )
+		"""
+		spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse --nanopore $long -o spades_output --metaviral
+		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
+		"""
+	else
+		"""
+		spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse --nanopore $long -o spades_output
+		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
+		"""
 }
 
 
@@ -210,16 +225,22 @@ process GenomeEvaluationSpades {
 
 	input:
 		file(spades_fasta) from spades_out_short.mix(spades_out_hybrid)
-		file(reference_db)
+		file opt_ref from reference_db
 	output:
 		file "quast_output"
 
 	when:
 		!long_only_flag
 
-	"""
-	quast.py -t $threads -r $reference_db -o quast_output $spades_fasta
-	"""
+	script:
+	if( opt_ref.name != 'NONE_REF' )
+		"""
+		quast.py -t $threads -r $opt_ref -o quast_output $spades_fasta
+		"""
+	else
+		"""
+		quast.py -t $threads -o quast_output $spades_fasta
+		"""
 }
 
 
@@ -230,16 +251,22 @@ process GenomeEvaluationFlye {
 
 	input:
 		file(flye_fasta) from flye_out
-		file(reference_db)
+		file opt_ref from reference_db
 	output:
 		file "quast_output"
 
 	when:
 		long_only_flag
 
-	"""
-	quast.py -t $threads -r $reference_db -o quast_output $flye_fasta
-	"""
+	script:
+	if( opt_ref.name != 'NONE_REF' )
+		"""
+		quast.py -t $threads -r $opt_ref -o quast_output $flye_fasta
+		"""
+	else
+		"""
+		quast.py -t $threads -o quast_output $spades_fasta
+		"""
 }
 
 
@@ -258,13 +285,15 @@ def help() {
     println "    --reverse       STR      path to reverse FASTQ input for a single sample"
     println "    --hybrid        STR      optional path to concatenated Nanopore FASTQ input for hybrid assembly"
     println "    --output        STR      path to output directory"
-    println "    --reference     STR      path to pre-made BLAST database to query against"
+    println "    --host          STR      optional path to host genome FASTA file for host read depletion"
+    println "    --reference     STR      optional path to target genome FASTA file for calculating assembly metrics"
     println ""
     println "Algorithm options:"
     println ""
     println "    --threads       INT      number of process threads, default 1 (max thread use = maxForks * threads)"
     println "    --metagenomic   FLAG     use metaSPAdes or Flye for metagenomic sample (cannot be used with hybrid assembly)"
     println "    --nanopore      FLAG     the input reads are concatenated Nanopore FASTQ data only (uses Flye assembler)"
+    println "    --use_index     FLAG     use the pre-built BWA indices for host reference genome"
     println ""
     println "Help options:"
     println ""
