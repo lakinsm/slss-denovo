@@ -11,6 +11,7 @@ hybrid = file(params.hybrid)
 reverse = file(params.reverse)
 meta_flag = params.metagenomic
 long_only_flag = params.nanopore
+my_scratch = params.scratch_dir
 
 
 Channel
@@ -149,12 +150,12 @@ process SpadesAssemblyShort {
 	script:
 	if( meta_flag )
 		"""
-		spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse -o spades_output --metaviral
+		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse -o spades_output --metaviral
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 	else
 		"""
-		spades -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse -o spades_output
+		spades -t $threads --tmp $my_scratch -1 $forward -2 $reverse -o spades_output
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 }
@@ -177,12 +178,12 @@ process SpadesAssemblyHybrid {
 	script:
 	if( meta_flag )
 		"""
-		spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse --nanopore $long -o spades_output --metaviral
+		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse --nanopore $long -o spades_output --metaviral
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 	else
 		"""
-		spades.py -t $threads --tmp /tmp/spades_tmp -1 $forward -2 $reverse --nanopore $long -o spades_output
+		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse --nanopore $long -o spades_output
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 }
@@ -287,6 +288,7 @@ def help() {
     println "    --output        STR      path to output directory"
     println "    --host          STR      optional path to host genome FASTA file for host read depletion"
     println "    --reference     STR      optional path to target genome FASTA file for calculating assembly metrics"
+    println "    --scratch_dir   STR      optional path to large working directory for scratch files"
     println ""
     println "Algorithm options:"
     println ""

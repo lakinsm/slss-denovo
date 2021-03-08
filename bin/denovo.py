@@ -116,6 +116,8 @@ if __name__ == '__main__':
 		args.threads,
 		'--output',
 		args.output,
+		'--scratch_dir',
+		temp_dir
 	]
 
 	if args.host_reference:
