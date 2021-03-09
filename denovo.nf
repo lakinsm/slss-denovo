@@ -58,6 +58,8 @@ if( params.use_index ) {
 process BwaHostDepletionShort {
     tag {samplename}
 
+    publishDir "${params.output}/HostDepletion", mode: "copy"
+
     input:
         set samplename, path(forward) from forward_reads
         file(reverse)
@@ -65,6 +67,7 @@ process BwaHostDepletionShort {
 		file opt_ref from host_reference
 	output:
 		set samplename, file("${samplename}_short_R1.fastq"), file("${samplename}_short_R2.fastq") into (short_depleted, short_hybrid_depleted)
+		file("*.log")
 
 	when:
 		!long_only_flag
@@ -79,6 +82,7 @@ process BwaHostDepletionShort {
 		"""
 		cp forward ${samplename}_short_R1.fastq
 		cp reverse ${samplename}_short_R2.fastq
+		echo "No depletion performed" > ${samplename}_depletion_stats.log
 		"""
 }
 
@@ -86,12 +90,15 @@ process BwaHostDepletionShort {
 process BwaHostDepletionLongExclusive {
     tag {samplename}
 
+    publishDir "${params.output}/HostDepletion", mode: "copy"
+
     input:
         set samplename, path(reads) from nanopore_reads
         file index from host_reference_long.collect()
 		file opt_ref from host_reference
 	output:
 		set samplename, file("${samplename}_long.fastq") into (long_depleted)
+		file("*.log")
 
 	when:
 		long_only_flag
@@ -105,11 +112,15 @@ process BwaHostDepletionLongExclusive {
 	else
 		"""
 		cp $reads ${samplename}_long.fastq
+		echo "No depletion performed" > ${samplename}_depletion_stats.log
 		"""
 }
 
 
 process BwaHostDepletionLongHybrid {
+	tag {samplename}
+
+	publishDir "${params.output}/HostDepletion", mode: "copy"
 
     input:
         file hybrid_str from hybrid
@@ -117,6 +128,7 @@ process BwaHostDepletionLongHybrid {
 		file opt_ref from host_reference
 	output:
 		file("long.fastq") into (long_hybrid_depleted)
+		file("*.log")
 
 	when:
 		(hybrid_str.name != 'NONE_HYBRID') && !long_only_flag
@@ -130,6 +142,7 @@ process BwaHostDepletionLongHybrid {
 	else
 		"""
 		cp $hybrid long.fastq
+		echo "No depletion performed" > long_depletion_stats.log
 		"""
 }
 

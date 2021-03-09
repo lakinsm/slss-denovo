@@ -1,27 +1,39 @@
 #!/usr/bin/env python3
 
 import argparse
+import sys
 
 
 class SamParser(object):
 	"""
 	Line-by-line parsing of Sequence Alignment Map (SAM) UTF-8 encoded files. Outputs non-aligned reads into one or
 	two FASTQ files depending on input arguments (single-end or long read vs. paired-end), resulting in a depletion of
-	aligned reads (host).
+	aligned reads (host).  Paired reads where one mate maps but the other does not are both output.
 	"""
 
-	def __init__(self, sam_path, forward_outpath, reverse_outpath=None):
+	def __init__(self, sam_path, forward_outpath, reverse_outpath=None, filter_ns=True):
 		"""
 		Initialize object and data structures for storing coverage and coverage over time, if specified.
 		:param sam_path: STR, path to input SAM file
 		:param forward_outpath: STR, path to forward read output file in FASTQ format
 		:param reverse_outpath: STR, path to reverse read output file in FASTQ format (optional if single-end or long)
+		:param filter_ns: BOOL, filter out reads containing more than 1 N in the nucleotide string
 		"""
+		self.total_reads_processed = 0
+		self.reads_unampped = 0
+		self.pass_filter = False
+		self.prev_header = ''
+		self.prev_qual = ''
+		self.prev_seq = ''
+		self.prev_rev = False
+		self.prev_pass_filter = False
 		self.sam_path = sam_path
 		self.forward_fp = forward_outpath
 		self.forward_handle = None
+		self.paired = False
 		if reverse_outpath:
 			self.reverse_fp = reverse_outpath
+			self.paired = True
 		else:
 			self.reverse_fp = None
 		self.reverse_handle = None
@@ -40,35 +52,89 @@ class SamParser(object):
 		"""
 		Iterator for SAM file handle, outputs non-aligned read entries.
 		"""
-		if not self.line:
-			self._close()
-			raise StopIteration
-		entries = self.line.split('\t')
-		sam_flag = int(entries[1])
-		# Skip aligned reads
-		while sam_flag & 4 == 0:
-			self.line = self.handle.readline()
+		if self.paired:
 			if not self.line:
 				self._close()
 				raise StopIteration
 			entries = self.line.split('\t')
 			sam_flag = int(entries[1])
-		query_header = entries[0]
-		query_seq = entries[9]
-		query_qual = entries[10]
-		rev = (sam_flag & 128) != 0
-		if rev:
-			self.reverse_handle.write('@{}\n{}\n+\n{}\n'.format(
-				query_header,
-				query_seq,
-				query_qual
-			))
+			# Skip alternative alignments
+			if sam_flag & 2048 == 0:
+				if sam_flag & 4 != 0:
+					query_header = entries[0]
+					query_seq = entries[9]
+					query_qual = entries[10]
+					rev = (sam_flag & 128) != 0
+					if query_seq.count('N') < 2:
+						self.pass_filter = True
+						if query_header == self.prev_header and (self.prev_pass_filter or self.pass_filter):
+							if rev and not self.prev_rev:
+								self.reverse_handle.write('@{}\n{}\n+\n{}\n'.format(
+									query_header,
+									query_seq,
+									query_qual
+								))
+								self.forward_handle.write('@{}\n{}\n+\n{}\n'.format(
+									self.prev_header,
+									self.prev_seq,
+									self.prev_qual
+								))
+							elif not rev and self.prev_rev:
+								self.reverse_handle.write('@{}\n{}\n+\n{}\n'.format(
+									self.prev_header,
+									self.prev_seq,
+									self.prev_qual
+								))
+								self.forward_handle.write('@{}\n{}\n+\n{}\n'.format(
+									query_header,
+									query_seq,
+									query_qual
+								))
+							else:
+								sys.stderr.write('Reads with the same name have matching orientations: {}'.format(
+									query_header
+								))
+								raise ValueError
+				else:
+					self.total_reads_processed += 1
+					self.pass_filter = False
+				self.prev_header = entries[0]
+				self.prev_seq = entries[9]
+				self.prev_qual = entries[10]
+				self.prev_rev = (sam_flag & 128) != 0
+				self.prev_pass_filter = self.pass_filter
 		else:
-			self.forward_handle.write('@{}\n{}\n+\n{}\n'.format(
-				query_header,
-				query_seq,
-				query_qual
-			))
+			if not self.line:
+				self._close()
+				raise StopIteration
+			entries = self.line.split('\t')
+			sam_flag = int(entries[1])
+			# Skip aligned reads
+			while sam_flag & 4 == 0:
+				self.total_reads_processed += 1
+				self.line = self.handle.readline()
+				if not self.line:
+					self._close()
+					raise StopIteration
+				entries = self.line.split('\t')
+				sam_flag = int(entries[1])
+			self.reads_unampped
+			query_header = entries[0]
+			query_seq = entries[9]
+			query_qual = entries[10]
+			rev = (sam_flag & 128) != 0
+			if rev:
+				self.reverse_handle.write('@{}\n{}\n+\n{}\n'.format(
+					query_header,
+					query_seq,
+					query_qual
+				))
+			else:
+				self.forward_handle.write('@{}\n{}\n+\n{}\n'.format(
+					query_header,
+					query_seq,
+					query_qual
+				))
 		self.line = self.handle.readline()
 
 	def _open(self):
@@ -97,3 +163,11 @@ if __name__ == '__main__':
 	sam_parser = SamParser(args.sam_file, args.forward, args.reverse)
 	for _ in sam_parser:
 		continue
+	fname = args.forward.split('/')[-1].split('.')[0]
+	logpath = '/'.join(args.forward.split('/')[:-1]) + '/' + fname + '_depletion_stats.log'
+	with open(logpath, 'w') as log:
+			log.write('total_reads: {}\nreads_pass_filter: {}\npercent_depleted: {} %\n'.format(
+				sam_parser.total_reads_processed,
+				sam_parser.reads_unampped,
+				100 * float(sam_parser.reads_unampped) / float(sam_parser.total_reads_processed)
+			))
