@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+import os
 
 
 class SamParser(object):
@@ -20,7 +21,7 @@ class SamParser(object):
 		:param filter_ns: BOOL, filter out reads containing more than 1 N in the nucleotide string
 		"""
 		self.total_reads_processed = 0
-		self.reads_unampped = 0
+		self.reads_pass_filter = 0
 		self.pass_filter = False
 		self.prev_header = ''
 		self.prev_qual = ''
@@ -60,6 +61,7 @@ class SamParser(object):
 			sam_flag = int(entries[1])
 			# Skip alternative alignments
 			if sam_flag & 2048 == 0:
+				self.total_reads_processed += 1
 				if sam_flag & 4 != 0:
 					query_header = entries[0]
 					query_seq = entries[9]
@@ -67,6 +69,7 @@ class SamParser(object):
 					rev = (sam_flag & 128) != 0
 					if query_seq.count('N') < 2:
 						self.pass_filter = True
+						self.reads_pass_filter += 1
 						if query_header == self.prev_header and (self.prev_pass_filter or self.pass_filter):
 							if rev and not self.prev_rev:
 								self.reverse_handle.write('@{}\n{}\n+\n{}\n'.format(
@@ -96,7 +99,6 @@ class SamParser(object):
 								))
 								raise ValueError
 				else:
-					self.total_reads_processed += 1
 					self.pass_filter = False
 				self.prev_header = entries[0]
 				self.prev_seq = entries[9]
@@ -109,32 +111,20 @@ class SamParser(object):
 				raise StopIteration
 			entries = self.line.split('\t')
 			sam_flag = int(entries[1])
-			# Skip aligned reads
-			while sam_flag & 4 == 0:
+			# Skip alternative alignments
+			if sam_flag & 2048 == 0:
 				self.total_reads_processed += 1
-				self.line = self.handle.readline()
-				if not self.line:
-					self._close()
-					raise StopIteration
-				entries = self.line.split('\t')
-				sam_flag = int(entries[1])
-			self.reads_unampped
-			query_header = entries[0]
-			query_seq = entries[9]
-			query_qual = entries[10]
-			rev = (sam_flag & 128) != 0
-			if rev:
-				self.reverse_handle.write('@{}\n{}\n+\n{}\n'.format(
-					query_header,
-					query_seq,
-					query_qual
-				))
-			else:
-				self.forward_handle.write('@{}\n{}\n+\n{}\n'.format(
-					query_header,
-					query_seq,
-					query_qual
-				))
+				if sam_flag & 4 != 0:
+					query_header = entries[0]
+					query_seq = entries[9]
+					query_qual = entries[10]
+					if query_seq.count('N') < 2:
+						self.reads_pass_filter += 1
+						self.forward_handle.write('@{}\n{}\n+\n{}\n'.format(
+							query_header,
+							query_seq,
+							query_qual
+						))
 		self.line = self.handle.readline()
 
 	def _open(self):
@@ -150,6 +140,10 @@ class SamParser(object):
 			self.reverse_handle.close()
 
 
+def get_real_file_from_file(infile):
+	return os.path.realpath(infile)
+
+
 parser = argparse.ArgumentParser('deplete_host_from_sam.py')
 parser.add_argument('sam_file', type=str, help='Input SAM filepath')
 parser.add_argument('-r1', '--forward', type=str, default=None, required=True,
@@ -163,11 +157,12 @@ if __name__ == '__main__':
 	sam_parser = SamParser(args.sam_file, args.forward, args.reverse)
 	for _ in sam_parser:
 		continue
-	fname = args.forward.split('/')[-1].split('.')[0]
-	logpath = '/'.join(args.forward.split('/')[:-1]) + '/' + fname + '_depletion_stats.log'
+	forward_path = get_real_file_from_file(args.forward)
+	fname = forward_path.split('/')[-1].split('.')[0]
+	logpath = '/'.join(forward_path.split('/')[:-1]) + '/' + fname + '_depletion_stats.log'
 	with open(logpath, 'w') as log:
 			log.write('total_reads: {}\nreads_pass_filter: {}\npercent_depleted: {} %\n'.format(
 				sam_parser.total_reads_processed,
-				sam_parser.reads_unampped,
-				100 * float(sam_parser.reads_unampped) / float(sam_parser.total_reads_processed)
+				sam_parser.reads_pass_filter,
+				100 * float(sam_parser.reads_pass_filter) / float(sam_parser.total_reads_processed)
 			))
