@@ -12,16 +12,17 @@ class SamParser(object):
 	aligned reads (host).  Paired reads where one mate maps but the other does not are both output.
 	"""
 
-	def __init__(self, sam_path, forward_outpath, reverse_outpath=None, filter_ns=True):
+	def __init__(self, sam_path, forward_outpath, reverse_outpath=None, filter_ns=10):
 		"""
 		Initialize object and data structures for storing coverage and coverage over time, if specified.
 		:param sam_path: STR, path to input SAM file
 		:param forward_outpath: STR, path to forward read output file in FASTQ format
 		:param reverse_outpath: STR, path to reverse read output file in FASTQ format (optional if single-end or long)
-		:param filter_ns: BOOL, filter out reads containing more than 1 N in the nucleotide string
+		:param filter_ns: FLOAT, filter out reads containing more than this % Ns in the nucleotide string
 		"""
 		self.total_reads_processed = 0
 		self.reads_pass_filter = 0
+		self.n_filter_threshold = float(filter_ns)
 		self.pass_filter = False
 		self.prev_header = ''
 		self.prev_qual = ''
@@ -67,7 +68,7 @@ class SamParser(object):
 					query_seq = entries[9]
 					query_qual = entries[10]
 					rev = (sam_flag & 128) != 0
-					if query_seq.count('N') < 2:
+					if (100*float(query_seq.count('N')) / float(len(query_seq))) <= self.n_filter_threshold:
 						self.pass_filter = True
 						self.reads_pass_filter += 1
 						if query_header == self.prev_header and (self.prev_pass_filter or self.pass_filter):
@@ -118,7 +119,7 @@ class SamParser(object):
 					query_header = entries[0]
 					query_seq = entries[9]
 					query_qual = entries[10]
-					if query_seq.count('N') < 2:
+					if (100*float(query_seq.count('N')) / float(len(query_seq))) <= self.n_filter_threshold:
 						self.reads_pass_filter += 1
 						self.forward_handle.write('@{}\n{}\n+\n{}\n'.format(
 							query_header,
@@ -161,8 +162,8 @@ if __name__ == '__main__':
 	fname = forward_path.split('/')[-1].split('.')[0]
 	logpath = '/'.join(forward_path.split('/')[:-1]) + '/' + fname + '_depletion_stats.log'
 	with open(logpath, 'w') as log:
-			log.write('total_reads: {}\nreads_pass_filter: {}\npercent_depleted: {} %\n'.format(
-				sam_parser.total_reads_processed,
-				sam_parser.reads_pass_filter,
-				100 * float(sam_parser.reads_pass_filter) / float(sam_parser.total_reads_processed)
-			))
+		log.write('total_reads: {}\nreads_pass_filter: {}\npercent_remaining_after_depletion: {} %\n'.format(
+			sam_parser.total_reads_processed,
+			sam_parser.reads_pass_filter,
+			100 * float(sam_parser.reads_pass_filter) / float(sam_parser.total_reads_processed)
+		))
