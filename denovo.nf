@@ -155,11 +155,12 @@ process SpadesAssemblyShort {
 
 	input:
 		set samplename, file(forward), file(reverse) from short_depleted
+		file hybrid_str from hybrid
 	output:
 		file("${samplename}_spades_assembly.fasta") into (quast_spades_out_short, dmnd_spades_out_short)
 
 	when:
-		!hybrid && !long_only_flag
+		(hybrid_str.name == 'NONE_HYBRID') && !long_only_flag
 
 	script:
 	if( meta_flag )
@@ -183,11 +184,12 @@ process SpadesAssemblyHybrid {
 	input:
 		set samplename, file(forward), file(reverse) from short_hybrid_depleted
 		file(long_reads) from long_hybrid_depleted
+		file hybrid_str from hybrid
 	output:
 		file("${samplename}_spades_assembly.fasta") into (quast_spades_out_hybrid, dmnd_spades_out_hybrid)
 
 	when:
-		hybrid && !long_only_flag
+		(hybrid_str.name != 'NONE_HYBRID') && !long_only_flag
 
 	script:
 	if( meta_flag )
