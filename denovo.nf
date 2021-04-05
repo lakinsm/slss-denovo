@@ -294,9 +294,7 @@ process DiamondBlast {
 
 	script:
 	"""
-	diamond blastx --threads $threads --db $dmnd_db --query $assembly_fasta --out diamond_results.tsv \
-	--outfmt 6 qseqid qlen qstart qend sseqid slen sstart send evalue score length pident nident mismatch gaps qframe cigar sscinames \
-	--header --index-chunks 1
+	diamond blastx --threads $threads --db $dmnd_db --query $assembly_fasta --out diamond_results.tsv --outfmt 6 qseqid qlen qstart qend sseqid slen sstart send evalue score length pident nident mismatch gaps qframe cigar sscinames --header --index-chunks 1
 	"""
 }
 
