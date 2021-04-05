@@ -4,6 +4,7 @@ if( params.help ) {
 	return help()
 }
 
+diamond_db = file(params.diamond_db)
 reference_db = file(params.reference)
 host_reference = file(params.host)
 threads = params.threads
@@ -155,7 +156,7 @@ process SpadesAssemblyShort {
 	input:
 		set samplename, file(forward), file(reverse) from short_depleted
 	output:
-		file("${samplename}_spades_assembly.fasta") into spades_out_short
+		file("${samplename}_spades_assembly.fasta") into (quast_spades_out_short, dmnd_spades_out_short)
 
 	when:
 		!hybrid && !long_only_flag
@@ -183,7 +184,7 @@ process SpadesAssemblyHybrid {
 		set samplename, file(forward), file(reverse) from short_hybrid_depleted
 		file(long_reads) from long_hybrid_depleted
 	output:
-		file("${samplename}_spades_assembly.fasta") into spades_out_hybrid
+		file("${samplename}_spades_assembly.fasta") into (quast_spades_out_hybrid, dmnd_spades_out_hybrid)
 
 	when:
 		hybrid && !long_only_flag
@@ -210,7 +211,7 @@ process FlyeAssemblyLong {
 	input:
 		set samplename, file(reads) from long_depleted
 	output:
-		file("${samplename}_flye_assembly.fasta") into flye_out
+		file("${samplename}_flye_assembly.fasta") into (quast_flye_out, dmnd_flye_out)
 		file("${samplename}_flye_assembly_info.txt")
 
 	when:
@@ -233,12 +234,10 @@ process FlyeAssemblyLong {
 
 
 process GenomeEvaluationSpades {
-	tag {samplename}
-
 	publishDir "${params.output}/AssemblyStatistics", mode: "copy"
 
 	input:
-		file(spades_fasta) from spades_out_short.mix(spades_out_hybrid)
+		file(spades_fasta) from quast_spades_out_short.mix(quast_spades_out_hybrid)
 		file opt_ref from reference_db
 	output:
 		file "quast_output"
@@ -259,12 +258,10 @@ process GenomeEvaluationSpades {
 
 
 process GenomeEvaluationFlye {
-	tag {samplename}
-
 	publishDir "${params.output}/AssemblyStatistics", mode: "copy"
 
 	input:
-		file(flye_fasta) from flye_out
+		file(flye_fasta) from quast_flye_out
 		file opt_ref from reference_db
 	output:
 		file "quast_output"
@@ -284,11 +281,29 @@ process GenomeEvaluationFlye {
 }
 
 
+process DiamondBlast {
+	publishDir "${params.output}/DiamondBlast", mode: "copy"
+
+	input:
+		file(assembly_fasta) from dmnd_flye_out.mix(dmnd_spades_out_hybrid, dmnd_spades_out_short)
+		file(dmnd_db) from diamond_db
+	output:
+		file('diamond_results.tsv')
+
+	script:
+	"""
+	diamond blastx --threads $threads --db $dmnd_db --query $assembly_fasta --out diamond_results.tsv \
+	--outfmt 6 qseqid qlen qstart qend sseqid slen sstart send evalue score length pident nident mismatch gaps qframe cigar sscinames \
+	--header --index-chunks 1
+	"""
+}
+
+
 def help() {
     println ""
     println "Program: denovo.nf"
     println "Developer: Steven Lakin, USDA APHIS"
-    println "Description: De novo assembly pipeline for short paired-end, hybrid short/long, or Nanopore long data."
+    println "Description: De novo assembly and BLAST pipeline for short paired-end, hybrid short/long, or Nanopore long data."
     println ""
     println "Usage: denovo.nf [options]"
     println "Example: denovo.nf"
@@ -301,6 +316,7 @@ def help() {
     println "    --output        STR      path to output directory"
     println "    --host          STR      optional path to host genome FASTA file for host read depletion"
     println "    --reference     STR      optional path to target genome FASTA file for calculating assembly metrics"
+    println "    --diamond_db    STR      path to indexed Diamond tBLASTx database"
     println "    --scratch_dir   STR      optional path to large working directory for scratch files"
     println ""
     println "Algorithm options:"

@@ -27,6 +27,8 @@ parser.add_argument('--host_reference', default=None, required=False, type=str,
                     help='Host reference sequence FASTA for host depletion (optional)')
 parser.add_argument('--target_reference', default=None, required=False, type=str,
                     help='Target reference sequence FASTA for assembly metric calculation (optional)')
+parser.add_argument('-d', '--diamond_db', default=None, required=True, type=str,
+                    help='Location of Diamond indexed BLAST nr database file')
 parser.add_argument('-w', '--work_dir', default='/tmp', type=str,
                     help='Working directory for temporary files (must be shared if using SLURM/HPC)')
 parser.add_argument('-m', '--metagenomic', default=False, action='store_true',
@@ -99,6 +101,7 @@ if __name__ == '__main__':
 	validate_input_args(args)
 	temp_dir = get_real_dir_from_dir(args.work_dir)
 	nextflow_path = '/'.join(get_real_dir_from_file(sys.argv[0]).split('/')[:-1]) + '/denovo.nf'
+	diamond_path = os.path.realpath(args.diamond_db)
 
 	if args.slurm:
 		nextflow_config = nextflow_path.replace('denovo.nf', SLURM_CONFIG)
@@ -117,7 +120,9 @@ if __name__ == '__main__':
 		'--output',
 		args.output,
 		'--scratch_dir',
-		temp_dir
+		temp_dir,
+		'--diamond_db',
+		diamond_path
 	]
 
 	if args.host_reference:

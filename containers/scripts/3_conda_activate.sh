@@ -15,6 +15,8 @@ cd /opt/biotools || exit
 wget https://downloads.sourceforge.net/project/quast/quast-5.0.2.tar.gz
 tar -xzf quast-5.0.2.tar.gz
 cd quast-5.0.2 || exit
+sed -i -r 's/import cgi/import html/' quast_libs/site_packages/jsontemplate/jsontemplate.py
+sed -i -r 's/cgi\.escape/html\.escape/g' quast_libs/site_packages/jsontemplate/jsontemplate.py
 ./setup.py install
 cd ../
 
