@@ -170,7 +170,7 @@ process SpadesAssemblyShort {
 		"""
 	else
 		"""
-		spades -t $threads --tmp $my_scratch -1 $forward -2 $reverse -o spades_output
+		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse -o spades_output
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 }
