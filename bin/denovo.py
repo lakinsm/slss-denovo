@@ -193,7 +193,7 @@ if __name__ == '__main__':
 		]
 
 		if args.metagenomic:
-			sys.stdout.write('Performing paired-end Illumina de novo assembly using metaviralSPAdes...\n\n')
+			sys.stdout.write('Performing paired-end Illumina de novo assembly using metaSPAdes...\n\n')
 			nextflow_arglist += ['--metagenomic']
 		else:
 			sys.stdout.write('Performing paired-end Illumina de novo assembly using SPAdes...\n\n')
@@ -216,7 +216,7 @@ if __name__ == '__main__':
 		elif not os.path.exists(temp_dir + '/' + NANOPORE_TEMP_FILENAME):
 			concatenate_nanopore_reads(args.long_reads, temp_dir)
 		if args.metagenomic:
-			sys.stdout.write('Performing hybrid Illumina/Nanopore de novo assembly using metaviralSPAdes...\n\n')
+			sys.stdout.write('Performing hybrid Illumina/Nanopore de novo assembly using metaSPAdes...\n\n')
 			nextflow_arglist += ['--metagenomic']
 		else:
 			sys.stdout.write('Performing hybrid Illumina/Nanopore de novo assembly using SPAdes...\n\n')

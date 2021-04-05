@@ -165,7 +165,7 @@ process SpadesAssemblyShort {
 	script:
 	if( meta_flag )
 		"""
-		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse -o spades_output --metaviral
+		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse -o spades_output --meta
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 	else
@@ -194,7 +194,7 @@ process SpadesAssemblyHybrid {
 	script:
 	if( meta_flag )
 		"""
-		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse --nanopore $long_reads -o spades_output --metaviral
+		spades.py -t $threads --tmp $my_scratch -1 $forward -2 $reverse --nanopore $long_reads -o spades_output --meta
 		mv spades_output/scaffolds.fasta ${samplename}_spades_assembly.fasta
 		"""
 	else

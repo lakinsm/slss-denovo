@@ -61,5 +61,11 @@ cd SPAdes-3.15.1 || exit
 PREFIX=/usr/local ./spades_compile.sh
 cd /opt/biotools || exit
 
+mkdir diamond
+cd diamond || exit
+wget https://github.com/bbuchfink/diamond/releases/download/v2.0.8/diamond-linux64.tar.gz
+tar -xzvf diamond-linux64.tar.gz
+
 cd /usr/bin || exit
 ln -s /opt/biotools/bwa/bwa
+ln -s /opt/biotools/diamond/diamond
