@@ -81,8 +81,8 @@ process BwaHostDepletionShort {
 	    """
 	else
 		"""
-		cp forward ${samplename}_short_R1.fastq
-		cp reverse ${samplename}_short_R2.fastq
+		cp $forward ${samplename}_short_R1.fastq
+		cp $reverse ${samplename}_short_R2.fastq
 		echo "No depletion performed" > ${samplename}_depletion_stats.log
 		"""
 }
