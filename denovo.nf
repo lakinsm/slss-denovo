@@ -49,7 +49,7 @@ if( params.use_index ) {
 			"""
 		else
 			"""
-			touch empty.fasta
+			touch ${params.host}.fasta
 			"""
 	}
 }
